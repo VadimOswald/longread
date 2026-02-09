@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Browser Privacy Probe</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 720px;
+            margin: 40px auto;
+            line-height: 1.5;
+        }
+        h1 {
+            margin-bottom: 0.5em;
+        }
+        .block {
+            margin-bottom: 24px;
+            padding: 12px;
+            border-left: 4px solid #ccc;
+            background: #f9f9f9;
+        }
+        code {
+            background: #eee;
+            padding: 2px 4px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Browser Privacy Probe</h1>
+<p>
+    Эта страница ничего никуда не отправляет.
+    Она просто показывает, что браузер сообщает сам о себе.
+</p>
+
+<div class="block">
+    <h2>1) Timezone</h2>
+    <div id="timezone"></div>
+</div>
+
+<div class="block">
+    <h2>2) Language / Locale</h2>
+    <div id="language"></div>
+</div>
+
+<div class="block">
+    <h2>3) WebRTC (local IP exposure)</h2>
+    <div id="webrtc">Проверка...</div>
+</div>
+
+<script>
+    // 1) Timezone
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    document.getElementById("timezone").textContent = tz;
+
+    // 2) Language / Locale
+    const langInfo = {
+        language: navigator.language,
+        languages: navigator.languages
+    };
+    document.getElementById("language").textContent =
+        JSON.stringify(langInfo, null, 2);
+
+    // 3) WebRTC local IP leak check
+    const webrtcOutput = document.getElementById("webrtc");
+
+    function probeWebRTC() {
+        const ips = new Set();
+
+        const pc = new RTCPeerConnection({
+            iceServers: []
+        });
+		
+		// Внутри probeWebRTC()
+
+if (ips.size === 0) {
+    window.__webrtcResult = "mDNS only or no local IPs";
+    webrtcOutput.textContent = window.__webrtcResult;
+} else {
+    window.__webrtcResult =
+        "local IP exposed: " + Array.from(ips).join(", ");
+    webrtcOutput.textContent = window.__webrtcResult;
+}
+
+
+        pc.createDataChannel("probe");
+
+        pc.onicecandidate = event => {
+            if (!event.candidate) {
+                if (ips.size === 0) {
+                    webrtcOutput.textContent =
+                        "Локальные IP не обнаружены (или WebRTC ограничен браузером).";
+                } else {
+                    webrtcOutput.textContent =
+                        "Обнаружены локальные IP:\n" +
+                        Array.from(ips).join("\n");
+                }
+                pc.close();
+                return;
+            }
+
+            const candidate = event.candidate.candidate;
+            const parts = candidate.split(" ");
+            const ip = parts[4];
+
+            if (ip) {
+                ips.add(ip);
+            }
+        };
+
+        pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .catch(err => {
+                webrtcOutput.textContent =
+                    "Ошибка WebRTC: " + err.message;
+            });
+    }
+
+    probeWebRTC();
+</script>
+
+</body>
+</html>
