@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
 import subprocess
-import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
@@ -58,23 +58,25 @@ def run_shell_quietly(command: str) -> str:
     return completed.stdout
 
 
-_IPV4_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-
-
 def read_dns_resolvers_from_ipconfig() -> List[str]:
     raw = run_shell_quietly("ipconfig /all")
 
-    found: List[str] = []
+    found: dict[str, None] = {}
 
     for line in raw.splitlines():
         if "DNS" not in line.upper():
             continue
 
-        for ip in _IPV4_PATTERN.findall(line):
-            if ip not in found:
-                found.append(ip)
+        for token in line.split():
+            try:
+                parsed_ip = ipaddress.ip_address(token)
+            except ValueError:
+                continue
 
-    return found
+            if isinstance(parsed_ip, ipaddress.IPv4Address):
+                found.setdefault(str(parsed_ip), None)
+
+    return list(found)
 
 
 def ask_the_internet_for_my_ip(timeout_seconds: float = 4.0) -> Optional[str]:
